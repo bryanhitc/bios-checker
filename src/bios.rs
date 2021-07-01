@@ -1,9 +1,15 @@
+// I want to preserve all API data in the schema if even we currently aren't using it
+#![allow(dead_code)]
+
+use log::info;
 use serde::Deserialize;
 
 const URL: &str =
     "https://rog.asus.com/support/webapi/product/GetPDBIOS?website=us&model=ROG-STRIX-B450-I-GAMING&pdid=10277&cpu=&LevelTagId=5931";
 
 pub async fn get_latest_version() -> anyhow::Result<u32> {
+    info!("Retrieving latest BIOS version...");
+
     let json = reqwest::get(URL).await?.text().await?;
     let response = serde_json::from_str::<Response>(json.as_str())?;
 
@@ -16,6 +22,7 @@ pub async fn get_latest_version() -> anyhow::Result<u32> {
         .and_then(|version| version.parse::<u32>().ok())
         .ok_or_else(|| anyhow::anyhow!("Unable to parse latest version"))?;
 
+    info!("Retrieved latest BIOS version: {}", version);
     Ok(version)
 }
 

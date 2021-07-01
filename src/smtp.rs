@@ -3,8 +3,9 @@ use lettre::{
     transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message,
     Tokio1Executor,
 };
+use log::info;
 
-pub(crate) async fn send_email(latest_version: u32) -> Result<()> {
+pub async fn send_email(latest_version: u32) -> Result<()> {
     let email = std::env::var("SMTP_EMAIL")?;
     let password = std::env::var("SMTP_PASSWORD")?;
     let creds = Credentials::new(email.clone(), password);
@@ -22,6 +23,7 @@ pub(crate) async fn send_email(latest_version: u32) -> Result<()> {
             latest_version
         ))?;
 
+    info!("Sending email: {:?}", email);
     mailer.send(email).await?;
 
     Ok(())
