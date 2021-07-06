@@ -578,7 +578,8 @@ dependencies = [
 
 [[package]]
 name = "lambda-notifiers"
-version = "0.1.0"
+version = "0.1.3"
+source = "git+https://github.com/bryanhitc/lambda-notifiers#466b0b14dd86a1cb4010e7a7cf0487a8e23df81d"
 dependencies = [
  "anyhow",
  "async-trait",
