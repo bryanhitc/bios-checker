@@ -67,7 +67,7 @@ impl Notifier for DiscordNotifier {
             }
         });
 
-        // Unwrap should be fine since either the client start error
+        // Unwrap is fine since either the client start error
         // above or the client ready event will send us a message
         receiver.recv().await.unwrap()?;
 
@@ -77,25 +77,32 @@ impl Notifier for DiscordNotifier {
     async fn notify(&self, message: Self::Message) -> Result<()> {
         let start = Instant::now();
 
-        // This shouldn't be too big, so I'd rather clone instead
-        // of locking while sending a long async message.
-        let channels = {
+        // Consider adding mechanism (pref general abstraction)
+        // for sharing lock time among all concurrent notify calls.
+        // Then again, building the notifications should be quick,
+        // so this is likely a non-issue, especially for my use-case.
+        // We could also copy the channel ids and then map them
+        // outside of the lock, but this doesn't scale well with
+        // a reasonably high number of registered channels
+        let notifications = {
             let data = self.data.read().await;
-            data.get::<RegisterChannelIds>()
-                .cloned()
-                .expect("Discord notification channels should exist")
+            let channels = data
+                .get::<RegisterChannelIds>()
+                .expect("Discord notification channels should exist");
+
+            channels
+                .iter()
+                .map(|channel| {
+                    channel.send_message(&self.http, |m| {
+                        let message = format!("@everyone {}", message.clone());
+                        m.content(message);
+                        m
+                    })
+                })
+                .collect::<Vec<_>>()
         };
 
-        let num_notifications = channels.len();
-
-        let notifications = channels.into_iter().map(|channel| {
-            channel.send_message(&self.http, |m| {
-                let message = format!("@everyone {}", message.clone());
-                m.content(message);
-                m
-            })
-        });
-
+        let num_notifications = notifications.len();
         let responses = futures::future::join_all(notifications).await;
         let num_errors = responses.into_iter().filter(|r| r.is_err()).count();
 
