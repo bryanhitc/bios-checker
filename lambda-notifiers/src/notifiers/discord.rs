@@ -62,7 +62,7 @@ impl Notifier for DiscordNotifier {
         tokio::spawn(async move {
             if let Err(err) = client.start().await {
                 // Unwrap is fine since we know the receiver is waiting for a response
-                error!("[Discord] Failed to start client: {}", err);
+                error!("[Discord] Failed to start client: {:?}", err);
                 sender.send(Err(anyhow::anyhow!(err))).unwrap();
             }
         });
@@ -78,39 +78,36 @@ impl Notifier for DiscordNotifier {
         let start = Instant::now();
 
         // This shouldn't be too big, so I'd rather clone instead
-        // of locking while sending a long async message.
+        // of locking while creating the send_message futures. We'd
+        // need to collect those futures into a vec anyway since we
+        // can't return an iterator based on lock-protected data.
         let channels = {
             let data = self.data.read().await;
             data.get::<RegisterChannelIds>()
-                .cloned()
                 .expect("Discord notification channels should exist")
+                .to_vec()
         };
 
         let num_notifications = channels.len();
-
         let notifications = channels.into_iter().map(|channel| {
             channel.send_message(&self.http, |m| {
-                let message = format!("@everyone {}", message.clone());
-                m.content(message);
+                m.content(format!("@everyone {message}"));
                 m
             })
         });
 
         let responses = futures::future::join_all(notifications).await;
-        let num_errors = responses.into_iter().filter(|r| r.is_err()).count();
+        let num_errors = responses.iter().filter(|r| r.is_err()).count();
 
         info!(
-            "[Discord] Finished notifying {} channels in {:?}",
-            num_notifications,
+            "[Discord] Finished notifying {num_notifications} channels in {:?}",
             start.elapsed()
         );
 
         match num_errors {
             0 => Ok(()),
             _ => Err(anyhow::format_err!(
-                "An error occurred for sending {}/{} messages",
-                num_errors,
-                num_notifications
+                "An error occurred for sending {num_errors}/{num_notifications} messages",
             )),
         }
     }
@@ -136,11 +133,12 @@ struct Handler {
 #[serenity::async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-        info!("[Discord] {} is connected!", ready.user.name);
+        let bot_name = ready.user.name.as_str();
+        info!("[Discord] {bot_name} is connected!");
 
         let guild_channels = ready
             .guilds
-            .into_iter()
+            .iter()
             .map(|guild| ctx.http.get_channels(guild.id().into()));
 
         let guild_channels = futures::future::join_all(guild_channels).await;
@@ -167,8 +165,7 @@ impl EventHandler for Handler {
             .join(", ");
 
         info!(
-            "[Discord] {} automatically registered to the following channels for notifications: {}",
-            ready.user.name, channel_names,
+            "[Discord] {bot_name} automatically registered to the following channels for notifications: {channel_names}",
         );
 
         {

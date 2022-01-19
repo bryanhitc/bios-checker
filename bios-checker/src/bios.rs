@@ -16,81 +16,59 @@ pub async fn get_latest_version() -> anyhow::Result<u32> {
     let version = response
         .result
         .obj
-        .into_iter()
-        .next()
-        .and_then(|obj| obj.files.into_iter().next().map(|file| file.version))
+        .get(0)
+        .and_then(|obj| obj.files.get(0).map(|file| file.version.as_str()))
         .and_then(|version| version.parse::<u32>().ok())
         .ok_or_else(|| anyhow::anyhow!("Unable to parse latest version"))?;
 
-    info!("Retrieved latest BIOS version: {}", version);
+    info!("Retrieved latest BIOS version: {version}");
     Ok(version)
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct Response {
-    #[serde(rename = "Result")]
     pub result: Result,
-    #[serde(rename = "Status")]
     pub status: String,
-    #[serde(rename = "Message")]
     pub message: String,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct Result {
-    #[serde(rename = "Count")]
     pub count: i64,
-    #[serde(rename = "Obj")]
     pub obj: Vec<Item>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct Item {
-    #[serde(rename = "Name")]
     pub name: String,
-    #[serde(rename = "Count")]
     pub count: i64,
-    #[serde(rename = "Files")]
     pub files: Vec<File>,
-    #[serde(rename = "IsDescShow")]
     pub is_desc_show: bool,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct File {
-    #[serde(rename = "Id")]
     pub id: String,
-    #[serde(rename = "Version")]
     pub version: String,
-    #[serde(rename = "Title")]
     pub title: String,
-    #[serde(rename = "Description")]
     pub description: String,
-    #[serde(rename = "FileSize")]
     pub file_size: String,
-    #[serde(rename = "ReleaseDate")]
     pub release_date: String,
-    #[serde(rename = "IsRelease")]
     pub is_release: String,
-    #[serde(rename = "PosType")]
     pub pos_type: ::serde_json::Value,
-    #[serde(rename = "DownloadUrl")]
     pub download_url: DownloadUrl,
-    #[serde(rename = "HardwareInfoList")]
     pub hardware_info_list: ::serde_json::Value,
     #[serde(rename = "INFDate")]
     pub infdate: ::serde_json::Value,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct DownloadUrl {
-    #[serde(rename = "Global")]
     pub global: String,
-    #[serde(rename = "China")]
     pub china: ::serde_json::Value,
 }

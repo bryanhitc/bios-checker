@@ -1,3 +1,7 @@
+[profile.release]
+lto = 'thin'
+debug = true
+
 [workspace]
 members = [
     "bios-checker",

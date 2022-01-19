@@ -9,17 +9,20 @@ use log::info;
 
 use crate::Notifier;
 
+#[derive(Debug)]
 pub struct EmailNotifier {
     pub sender: EmailContact,
     password: String,
 }
 
+#[derive(Debug)]
 pub struct EmailMessage {
     pub destination: EmailContact,
     pub subject: String,
     pub body: String,
 }
 
+#[derive(Debug)]
 pub struct EmailContact {
     pub name: Option<String>,
     pub email: String,
