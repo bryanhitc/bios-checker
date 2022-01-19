@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use lambda_runtime::{handler_fn, Context, Error};
-use log::{debug, info, warn, LevelFilter};
+use log::{debug, error, info, warn, LevelFilter};
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 
@@ -65,11 +65,26 @@ async fn my_handler(request: Request, ctx: Context) -> Result<Response, Error> {
             "There's a new BIOS update for the ASUS B450-I: {expected_version} => {version}"
         );
 
-        // TODO: Determine what to do with potential errors. E.g., should we retry?
-        // Should we still succeed if at least one notification made it?
-        let _responses = futures::join!(send_discord_msg(body.clone()), send_email(body));
+        let (discord_response, email_response) =
+            futures::join!(send_discord_msg(body.clone()), send_email(body));
 
-        debug!("Notifications sent!");
+        debug!("Finished trying to send notifications");
+
+        let mut num_errors = 0;
+
+        if let Err(discord_error) = discord_response {
+            error!("Discord notification failed: {discord_error}");
+            num_errors += 1;
+        }
+
+        if let Err(email_error) = email_response {
+            error!("Email notification failed: {email_error}");
+            num_errors += 1;
+        }
+
+        if num_errors == 2 {
+            return Err(Error::from("All notifiers failed"));
+        }
     } else if version < expected_version {
         warn!("Latest version is less than expected: {version} < {expected_version}");
     }
