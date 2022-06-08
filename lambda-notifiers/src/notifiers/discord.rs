@@ -51,7 +51,9 @@ impl Notifier for DiscordNotifier {
         // TODO: Use OneShot channel if possible?
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Result<()>>();
 
-        let mut client = Client::builder(config.auth_token.clone())
+        info!("Starting client");
+
+        let mut client = Client::builder(config.auth_token.clone(), GatewayIntents::empty())
             .event_handler(Handler { start, config })
             .type_map_insert::<BotInitializedSender>(sender.clone())
             .await?;
@@ -77,19 +79,15 @@ impl Notifier for DiscordNotifier {
     async fn notify(&self, message: Self::Message) -> Result<()> {
         let start = Instant::now();
 
-        // This shouldn't be too big, so I'd rather clone instead
-        // of locking while creating the send_message futures. We'd
-        // need to collect those futures into a vec anyway since we
-        // can't return an iterator based on lock-protected data.
         let channels = {
             let data = self.data.read().await;
             data.get::<RegisterChannelIds>()
                 .expect("Discord notification channels should exist")
-                .to_vec()
+                .clone()
         };
 
         let num_notifications = channels.len();
-        let notifications = channels.into_iter().map(|channel| {
+        let notifications = channels.iter().map(|channel| {
             channel.send_message(&self.http, |m| {
                 m.content(format!("@everyone {message}"));
                 m
@@ -122,7 +120,7 @@ impl TypeMapKey for BotInitializedSender {
 struct RegisterChannelIds;
 
 impl TypeMapKey for RegisterChannelIds {
-    type Value = Vec<ChannelId>;
+    type Value = Arc<Vec<ChannelId>>;
 }
 
 struct Handler {
@@ -139,15 +137,15 @@ impl EventHandler for Handler {
         let guild_channels = ready
             .guilds
             .iter()
-            .map(|guild| ctx.http.get_channels(guild.id().into()));
+            .map(|guild| ctx.http.get_channels(guild.id.into()));
 
         let guild_channels = futures::future::join_all(guild_channels).await;
 
         let notification_channels = guild_channels
             .into_iter()
-            .filter_map(|guild_channels| guild_channels.ok())
             .filter_map(|channels| {
                 channels
+                    .ok()?
                     .into_iter()
                     .find(|channel| channel.name().contains(&self.config.channel_name))
             })
@@ -170,7 +168,7 @@ impl EventHandler for Handler {
 
         {
             let mut data = ctx.data.write().await;
-            data.insert::<RegisterChannelIds>(channel_ids);
+            data.insert::<RegisterChannelIds>(Arc::new(channel_ids));
 
             let sender = data.get_mut::<BotInitializedSender>().unwrap();
             sender

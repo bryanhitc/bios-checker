@@ -1,8 +1,5 @@
-// I want to preserve all API data in the schema if even we currently aren't using it
-#![allow(dead_code)]
-
-use log::info;
 use serde::Deserialize;
+use tracing::info;
 
 const URL: &str =
     "https://rog.asus.com/support/webapi/product/GetPDBIOS?website=us&model=ROG-STRIX-B450-I-GAMING&pdid=10277&cpu=&LevelTagId=5931";
@@ -27,7 +24,7 @@ pub async fn get_latest_version() -> anyhow::Result<u32> {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct Response {
+pub struct Response {
     pub result: Result,
     pub status: String,
     pub message: String,
@@ -35,14 +32,14 @@ struct Response {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct Result {
+pub struct Result {
     pub count: i64,
     pub obj: Vec<Item>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct Item {
+pub struct Item {
     pub name: String,
     pub count: i64,
     pub files: Vec<File>,
@@ -51,7 +48,7 @@ struct Item {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct File {
+pub struct File {
     pub id: String,
     pub version: String,
     pub title: String,
@@ -68,7 +65,7 @@ struct File {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct DownloadUrl {
+pub struct DownloadUrl {
     pub global: String,
     pub china: ::serde_json::Value,
 }
