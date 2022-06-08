@@ -119,10 +119,12 @@ async fn send_email(body: String) -> Result<()> {
         body,
     };
 
-    email_notifier.notify(message).await
+    email_notifier.notify(message).await?;
+    email_notifier.shutdown().await
 }
 
 async fn send_discord_msg(body: String) -> Result<()> {
-    let discord_notify = DiscordNotifier::init().await?;
-    discord_notify.notify(body).await
+    let discord = DiscordNotifier::init().await?;
+    discord.notify(body).await?;
+    discord.shutdown().await
 }

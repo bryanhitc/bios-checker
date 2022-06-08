@@ -3,8 +3,8 @@ use std::{sync::Arc, time::Instant};
 use anyhow::Result;
 use log::{error, info};
 use serde::Deserialize;
-use serenity::{model::prelude::*, prelude::*, Client};
-use tokio::sync::{mpsc::UnboundedSender, oneshot};
+use serenity::{client::bridge::gateway::ShardManager, model::prelude::*, prelude::*, Client};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::Notifier;
 
@@ -32,29 +32,19 @@ impl DiscordConfig {
 pub struct DiscordNotifier {
     data: Arc<RwLock<TypeMap>>,
     http: Arc<serenity::http::Http>,
-    shutdown: Option<oneshot::Sender<()>>,
+    shard_manager: Arc<Mutex<ShardManager>>,
 }
 
 impl DiscordNotifier {
     fn new(
         data: Arc<RwLock<TypeMap>>,
         http: Arc<serenity::http::Http>,
-        shutdown: oneshot::Sender<()>,
+        shard_manager: Arc<Mutex<ShardManager>>,
     ) -> Self {
         Self {
             data,
             http,
-            shutdown: Some(shutdown),
-        }
-    }
-}
-
-impl Drop for DiscordNotifier {
-    fn drop(&mut self) {
-        if let Some(sender) = self.shutdown.take() {
-            sender
-                .send(())
-                .expect("graceful shutdown sender will succeed");
+            shard_manager,
         }
     }
 }
@@ -70,7 +60,6 @@ impl Notifier for DiscordNotifier {
         // TODO: Use OneShot channel if possible?
         let (ready_sender, mut ready_receiver) =
             tokio::sync::mpsc::unbounded_channel::<Result<()>>();
-        let (shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
 
         let mut client = Client::builder(config.auth_token.clone(), GatewayIntents::empty())
             .event_handler(Handler { start, config })
@@ -80,19 +69,8 @@ impl Notifier for DiscordNotifier {
         let notifier = DiscordNotifier::new(
             client.data.clone(),
             client.cache_and_http.http.clone(),
-            shutdown_sender,
+            client.shard_manager.clone(),
         );
-
-        let shard_manager = client.shard_manager.clone();
-
-        tokio::spawn(async move {
-            shutdown_receiver
-                .await
-                .expect("no errors for receieving shutdown signal");
-
-            let mut manager = shard_manager.lock().await;
-            manager.shutdown_all().await;
-        });
 
         tokio::spawn(async move {
             if let Err(err) = client.start().await {
@@ -141,6 +119,13 @@ impl Notifier for DiscordNotifier {
                 "An error occurred for sending {num_errors}/{num_notifications} messages",
             )),
         }
+    }
+
+    async fn shutdown(self) -> Result<()> {
+        let mut shard_manager = self.shard_manager.lock().await;
+        shard_manager.shutdown_all().await;
+
+        Ok(())
     }
 }
 

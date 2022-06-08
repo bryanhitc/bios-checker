@@ -10,4 +10,5 @@ pub trait Notifier {
 
     async fn init() -> Result<Box<Self>>;
     async fn notify(&self, message: Self::Message) -> Result<()>;
+    async fn shutdown(self) -> Result<()>;
 }

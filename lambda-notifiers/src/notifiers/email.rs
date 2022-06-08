@@ -78,4 +78,8 @@ impl Notifier for EmailNotifier {
 
         response
     }
+
+    async fn shutdown(self) -> Result<()> {
+        Ok(())
+    }
 }
