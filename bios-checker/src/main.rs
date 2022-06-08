@@ -1,24 +1,19 @@
+use std::str::FromStr;
 use std::time::Instant;
 
 use anyhow::Result;
-use lambda_runtime::{handler_fn, Context, Error};
-use log::{debug, error, info, warn, LevelFilter};
-use serde::{Deserialize, Serialize};
-use simple_logger::SimpleLogger;
+use lambda_runtime::tower::BoxError;
+use lambda_runtime::{service_fn, Error, LambdaEvent};
+use serde::Serialize;
+use serde_json::Value;
+use tracing::{debug, error, info, warn};
+use tracing_subscriber::prelude::*;
 
 use bios_checker::bios;
 
 use lambda_notifiers::notifiers::discord::DiscordNotifier;
 use lambda_notifiers::notifiers::email::{EmailContact, EmailMessage, EmailNotifier};
 use lambda_notifiers::Notifier;
-
-// This doesn't do anything. I'm too lazy to try and figure out how
-// to get rid of the JSON payload requirement for lambda.
-#[derive(Debug, Deserialize)]
-struct Request {
-    #[allow(dead_code)]
-    command: String,
-}
 
 #[derive(Debug, Serialize)]
 struct Response {
@@ -29,18 +24,25 @@ struct Response {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
-    SimpleLogger::new()
-        .with_utc_timestamps()
-        .with_level(LevelFilter::Warn)
-        .with_module_level("bios_checker", LevelFilter::Trace)
-        .with_module_level("lambda_notifiers", LevelFilter::Trace)
-        .init()?;
+async fn main() -> Result<(), BoxError> {
+    let log_level = std::env::var("LOG_LEVEL")
+        .ok()
+        .and_then(|level| tracing::Level::from_str(&level).ok())
+        .unwrap_or(tracing::Level::INFO);
 
-    lambda_runtime::run(handler_fn(my_handler)).await
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::filter::LevelFilter::from_level(
+            log_level,
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    lambda_runtime::run(service_fn(my_handler)).await?;
+
+    Ok(())
 }
 
-async fn my_handler(request: Request, ctx: Context) -> Result<Response, Error> {
+async fn my_handler(request: LambdaEvent<Value>) -> Result<Response, BoxError> {
     let start = Instant::now();
     info!("Handling request: {:?}", request);
 
@@ -90,7 +92,7 @@ async fn my_handler(request: Request, ctx: Context) -> Result<Response, Error> {
     }
 
     let response = Response {
-        req_id: ctx.request_id,
+        req_id: request.context.request_id,
         expected_version,
         latest_version: version,
         notification_sent: should_notify,
