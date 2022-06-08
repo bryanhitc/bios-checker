@@ -4,7 +4,7 @@ use anyhow::Result;
 use log::{error, info};
 use serde::Deserialize;
 use serenity::{model::prelude::*, prelude::*, Client};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
 use crate::Notifier;
 
@@ -32,11 +32,30 @@ impl DiscordConfig {
 pub struct DiscordNotifier {
     data: Arc<RwLock<TypeMap>>,
     http: Arc<serenity::http::Http>,
+    shutdown: Option<oneshot::Sender<()>>,
 }
 
 impl DiscordNotifier {
-    fn new(data: Arc<RwLock<TypeMap>>, http: Arc<serenity::http::Http>) -> Self {
-        Self { data, http }
+    fn new(
+        data: Arc<RwLock<TypeMap>>,
+        http: Arc<serenity::http::Http>,
+        shutdown: oneshot::Sender<()>,
+    ) -> Self {
+        Self {
+            data,
+            http,
+            shutdown: Some(shutdown),
+        }
+    }
+}
+
+impl Drop for DiscordNotifier {
+    fn drop(&mut self) {
+        if let Some(sender) = self.shutdown.take() {
+            sender
+                .send(())
+                .expect("graceful shutdown sender will succeed");
+        }
     }
 }
 
@@ -49,29 +68,43 @@ impl Notifier for DiscordNotifier {
         let config = DiscordConfig::load()?;
 
         // TODO: Use OneShot channel if possible?
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Result<()>>();
-
-        info!("Starting client");
+        let (ready_sender, mut ready_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<Result<()>>();
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
 
         let mut client = Client::builder(config.auth_token.clone(), GatewayIntents::empty())
             .event_handler(Handler { start, config })
-            .type_map_insert::<BotInitializedSender>(sender.clone())
+            .type_map_insert::<BotInitializedSender>(ready_sender.clone())
             .await?;
 
-        let notifier =
-            DiscordNotifier::new(client.data.clone(), client.cache_and_http.http.clone());
+        let notifier = DiscordNotifier::new(
+            client.data.clone(),
+            client.cache_and_http.http.clone(),
+            shutdown_sender,
+        );
+
+        let shard_manager = client.shard_manager.clone();
+
+        tokio::spawn(async move {
+            shutdown_receiver
+                .await
+                .expect("no errors for receieving shutdown signal");
+
+            let mut manager = shard_manager.lock().await;
+            manager.shutdown_all().await;
+        });
 
         tokio::spawn(async move {
             if let Err(err) = client.start().await {
                 // Unwrap is fine since we know the receiver is waiting for a response
                 error!("[Discord] Failed to start client: {:?}", err);
-                sender.send(Err(anyhow::anyhow!(err))).unwrap();
+                ready_sender.send(Err(anyhow::anyhow!(err))).unwrap();
             }
         });
 
         // Unwrap should be fine since either the client start error
         // above or the client ready event will send us a message
-        receiver.recv().await.unwrap()?;
+        ready_receiver.recv().await.unwrap()?;
 
         Ok(Box::new(notifier))
     }
