@@ -1,9 +1,2 @@
-[profile.release]
-lto = 'thin'
-debug = true
-
 [workspace]
-members = [
-    "bios-checker",
-    "lambda-notifiers",
-]
+members = ["bios-checker", "lambda-notifiers"]
