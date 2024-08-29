@@ -4,11 +4,13 @@ pub mod notifiers;
 
 use anyhow::Result;
 
-#[async_trait::async_trait]
 pub trait Notifier {
     type Message;
 
-    async fn init() -> Result<Box<Self>>;
-    async fn notify(&self, message: Self::Message) -> Result<()>;
-    async fn shutdown(self) -> Result<()>;
+    fn init() -> impl std::future::Future<Output = Result<Box<Self>>> + Send;
+    fn notify(
+        &self,
+        message: Self::Message,
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
+    fn shutdown(self) -> impl std::future::Future<Output = Result<()>> + Send;
 }

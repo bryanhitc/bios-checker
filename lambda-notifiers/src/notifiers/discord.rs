@@ -49,7 +49,6 @@ impl DiscordNotifier {
     }
 }
 
-#[async_trait::async_trait]
 impl Notifier for DiscordNotifier {
     type Message = String;
 

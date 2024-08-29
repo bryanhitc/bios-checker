@@ -37,7 +37,6 @@ impl std::fmt::Display for EmailContact {
     }
 }
 
-#[async_trait::async_trait]
 impl Notifier for EmailNotifier {
     type Message = EmailMessage;
 
