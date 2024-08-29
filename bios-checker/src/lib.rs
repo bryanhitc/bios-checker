@@ -95,7 +95,7 @@ pub async fn check_bios_version(request_id: String) -> anyhow::Result<Response> 
     };
 
     info!(
-        "Lambda function completed successfully in {:?}: {:?}",
+        "Successfully checked bios version in {:?}: {:?}",
         start.elapsed(),
         response
     );

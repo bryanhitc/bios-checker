@@ -1,16 +1,11 @@
 use std::str::FromStr;
 
-use anyhow::Result;
-use lambda_runtime::tower::BoxError;
-use lambda_runtime::{service_fn, LambdaEvent};
-use serde_json::Value;
-
-use bios_checker::{check_bios_version, Response};
+use bios_checker::check_bios_version;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
-async fn main() -> Result<(), BoxError> {
+async fn main() -> anyhow::Result<()> {
     let log_level = std::env::var("LOG_LEVEL")
         .ok()
         .and_then(|level| tracing::Level::from_str(&level).ok())
@@ -22,12 +17,6 @@ async fn main() -> Result<(), BoxError> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    lambda_runtime::run(service_fn(lambda_handler)).await?;
+    check_bios_version(String::from("1")).await?;
     Ok(())
-}
-
-async fn lambda_handler(request: LambdaEvent<Value>) -> Result<Response, BoxError> {
-    check_bios_version(request.context.request_id)
-        .await
-        .map_err(BoxError::from)
 }
