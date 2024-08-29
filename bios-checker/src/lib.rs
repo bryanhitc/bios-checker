@@ -9,7 +9,6 @@ use lambda_notifiers::{
     Notifier,
 };
 use serde::Serialize;
-use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
 async fn send_email(body: String) -> anyhow::Result<()> {
@@ -42,33 +41,27 @@ pub struct Response {
 }
 
 pub async fn check_bios_version(request_id: String) -> anyhow::Result<Response> {
-    let start = Instant::now();
     info!("Handling request id: {:?}", request_id);
 
     let expected_version = std::env::var("LATEST_VER")?;
     let expected_version = expected_version
         .parse::<u32>()
         .expect("The expected version will be a valid u32");
-
     info!("Using expected version: {expected_version}");
 
-    let version = bios::get_latest_version().await;
+    info!("Retrieving latest BIOS version...");
+    let version = bios::get_latest_version().await?;
+    info!("Retrieved latest BIOS version '{}'", version);
 
-    info!("Retrieved new version in {:?}", start.elapsed());
-
-    let version = version?;
     let should_notify = version > expected_version;
-
     if should_notify {
         info!("Notifiers are being initialized! Version {version} > {expected_version}");
-
         let body = format!(
             "There's a new BIOS update for the ASUS B450-I: {expected_version} => {version}"
         );
 
         let (discord_response, email_response) =
             futures::join!(send_discord_msg(body.clone()), send_email(body));
-
         debug!("Finished trying to send notifications");
 
         let mut num_errors = 0;
@@ -87,18 +80,10 @@ pub async fn check_bios_version(request_id: String) -> anyhow::Result<Response> 
         warn!("Latest version is less than expected: {version} < {expected_version}");
     }
 
-    let response = Response {
+    Ok(Response {
         req_id: request_id,
         expected_version,
         latest_version: version,
         notification_sent: should_notify,
-    };
-
-    info!(
-        "Successfully checked bios version in {:?}: {:?}",
-        start.elapsed(),
-        response
-    );
-
-    Ok(response)
+    })
 }

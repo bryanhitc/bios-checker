@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use bios_checker::check_bios_version;
+use tokio::time::Instant;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -17,6 +18,12 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    check_bios_version(String::from("1")).await?;
+    let start = Instant::now();
+    let response = check_bios_version(String::from("1")).await?;
+    tracing::info!(
+        "Successfully checked bios version in {:?}: {:?}",
+        start.elapsed(),
+        response,
+    );
     Ok(())
 }
