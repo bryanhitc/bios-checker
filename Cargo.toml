@@ -1,2 +1,3 @@
 [workspace]
 members = ["bios-checker", "lambda-notifiers"]
+resolver = "2"
