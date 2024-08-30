@@ -2,7 +2,12 @@ use std::{sync::Arc, time::Instant};
 
 use anyhow::Result;
 use log::{error, info};
-use serenity::{client::bridge::gateway::ShardManager, model::prelude::*, prelude::*, Client};
+use serenity::{
+    all::{CreateMessage, ShardManager},
+    model::prelude::*,
+    prelude::*,
+    Client,
+};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::Notifier;
@@ -28,14 +33,14 @@ impl DiscordConfig {
 pub struct DiscordNotifier {
     data: Arc<RwLock<TypeMap>>,
     http: Arc<serenity::http::Http>,
-    shard_manager: Arc<Mutex<ShardManager>>,
+    shard_manager: Arc<ShardManager>,
 }
 
 impl DiscordNotifier {
     fn new(
         data: Arc<RwLock<TypeMap>>,
         http: Arc<serenity::http::Http>,
-        shard_manager: Arc<Mutex<ShardManager>>,
+        shard_manager: Arc<ShardManager>,
     ) -> Self {
         Self {
             data,
@@ -63,7 +68,7 @@ impl Notifier for DiscordNotifier {
 
         let notifier = DiscordNotifier::new(
             client.data.clone(),
-            client.cache_and_http.http.clone(),
+            client.http.clone(),
             client.shard_manager.clone(),
         );
 
@@ -94,9 +99,9 @@ impl Notifier for DiscordNotifier {
 
         let num_notifications = channels.len();
         let notifications = channels.iter().map(|channel| {
-            channel.send_message(&self.http, |m| {
-                m.content(format!("@everyone {message}"));
-                m
+            channel.send_message(&self.http, {
+                let msg = CreateMessage::new();
+                msg.content(format!("@everyone {message}"))
             })
         });
 
@@ -117,9 +122,7 @@ impl Notifier for DiscordNotifier {
     }
 
     async fn shutdown(self) -> Result<()> {
-        let mut shard_manager = self.shard_manager.lock().await;
-        shard_manager.shutdown_all().await;
-
+        self.shard_manager.shutdown_all().await;
         Ok(())
     }
 }
@@ -150,7 +153,7 @@ impl EventHandler for Handler {
         let guild_channels = ready
             .guilds
             .iter()
-            .map(|guild| ctx.http.get_channels(guild.id.into()));
+            .map(|guild| ctx.http.get_channels(guild.id));
 
         let guild_channels = futures::future::join_all(guild_channels).await;
 
