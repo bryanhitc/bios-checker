@@ -5,7 +5,7 @@ use tokio::time::Instant;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let log_level = std::env::var("LOG_LEVEL")
         .ok()

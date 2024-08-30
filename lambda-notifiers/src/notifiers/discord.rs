@@ -2,13 +2,12 @@ use std::{sync::Arc, time::Instant};
 
 use anyhow::Result;
 use log::{error, info};
-use serde::Deserialize;
 use serenity::{client::bridge::gateway::ShardManager, model::prelude::*, prelude::*, Client};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::Notifier;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 struct DiscordConfig {
     auth_token: String,
     channel_name: String,
@@ -16,16 +15,13 @@ struct DiscordConfig {
 
 impl DiscordConfig {
     fn load() -> Result<Self> {
-        let token = std::env::var("DISCORD_AUTH_TOKEN")?;
         let channel_name =
             std::env::var("DISCORD_CHANNEL_NAME").unwrap_or_else(|_| String::from("notification"));
-
-        let config = Self {
+        let token = std::env::var("DISCORD_AUTH_TOKEN")?;
+        Ok(Self {
             channel_name,
             auth_token: token,
-        };
-
-        Ok(config)
+        })
     }
 }
 

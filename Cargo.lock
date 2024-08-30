@@ -694,11 +694,8 @@ dependencies = [
  "futures",
  "lettre",
  "log",
- "serde",
- "serde_json",
  "serenity",
  "tokio",
- "unicase",
 ]
 
 [[package]]
